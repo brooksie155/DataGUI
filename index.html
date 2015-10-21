@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		
+		<!--Load the Google AJAX API & visulaisation for charts -->
+		<link rel="stylesheet" href="http://code.jquery.com/ui/1.9.2/themes/base/jquery-ui.css" />
+		<script src="http://code.jquery.com/jquery-1.8.3.js"></script>
+		<script src="http://code.jquery.com/ui/1.9.2/jquery-ui.js"></script>
+		<script type="text/javascript" src="http://www.google.com/jsapi"></script>
+		<script type="text/javascript">
+		  google.load('visualization', '1', {packages: ['corechart','table']});
+		</script>
+		
+		<script>
+		
+			var data 	= new Array;
+			var pAction = 'statistics/publisher';
+			var pFrom 	= '2015-01-01';
+			var pTo		= '2015-01-01';
+			var pBreak	= 'date';
+            var pKey    = '';
+            var pSecret = '';
+			
+			/**
+			 * call server side broker
+			 */
+			function callBroker() {
+				$("body").css({ opacity: 0.2 });
+				$.ajax({
+					url: 'broker.php',
+					data: {
+						sAction: 	pAction,
+						sFrom: 		pFrom,
+						sTo: 		pTo,
+						sBreak: 	pBreak,
+                        sKey:       pKey,
+                        sSecret:    pSecret
+					 },
+					 type: 'post',
+					 dataType: 'json',
+					 success: function(output) {	
+						data = output;
+						drawVisualization(data);
+						$("body").css({ opacity: 1 });
+					},
+                    done : function(output) {
+                        $("body").css({ opacity: 1 });
+                    }
+				});
+				
+			}
+		
+            function getColumnSum (dataView, column)
+            {
+
+                // Create an Array to hold column data
+                var tmpColumn = new Array();    
+
+                // Add each data value to the array with push()
+                for(var i = 0; i < dataView.getNumberOfRows(); ++i) {
+                    tmpColumn.push(dataView.getValue(i, column));
+                }
+
+                return google.visualization.data.sum(tmpColumn);
+            }
+            
+        
+            function calculateTotalsRow (dataView) 
+            {
+                var totalImpressions = this.getColumnSum(dataView, 1);
+                var totalClicks = this.getColumnSum(dataView, 2);
+                var totalRevenue = this.getColumnSum(dataView, 3);
+                var totalSpend = this.getColumnSum(dataView, 4);                
+
+                return [
+                    '<span style="font-weight:bold;font-size:1.1em;">Total</span>', 
+                    totalImpressions, 
+                    totalClicks, 
+                    totalRevenue,
+                    totalSpend
+                ];
+
+            }        
+        
+            function formatTableData (dataTable) 
+            {
+                var formatterA = new google.visualization.NumberFormat(
+                    {fractionDigits : 0, negativeColor: 'red', negativeParens: true}
+                );
+            
+                formatterA.format(dataTable, 1);
+                formatterA.format(dataTable, 2);
+
+                var formatterB = new google.visualization.NumberFormat(
+                    {negativeColor: 'red', negativeParens: true, prefix: '$'}
+                );        
+
+                formatterA.format(dataTable, 3);
+                formatterB.format(dataTable, 4);                
+                
+                return dataTable;
+            }
+        
+			/**
+			 * draw chart
+			 */
+			function drawVisualization(data) {
+
+                var gDataTable = google.visualization.arrayToDataTable(data);
+                var gDataView = new google.visualization.DataView(gDataTable);
+
+                // Create and draw the chart.
+                var chart = new google.visualization.LineChart(document.getElementById('lineChart'));
+                chart.draw(
+                      gDataView, {
+                        curveType: "function",
+                        width: '100%', 
+                        height: '800',
+                        vAxis: {maxValue: 10}
+                    }
+                );
+
+                // Create and draw the chart.
+                var chart = new google.visualization.BarChart(document.getElementById('barChart'));
+                chart.draw(
+                      gDataView, {
+                        curveType: "function",
+                        width: '100%', 
+                        height: '800',
+                        isStacked: true
+                    }
+                );            
+          
+                var totals = this.calculateTotalsRow(gDataView);              
+                gDataTable.addRow(totals);     
+                
+                gDataTable = formatTableData(gDataTable);
+          
+                // Create and draw the table.
+                var table = new google.visualization.Table(document.getElementById('table'))
+                table.draw(
+                    gDataView,
+                    {
+                        allowHtml : true,
+                        width: '100%', 
+                        height: '100%'
+                    }
+                );     
+            
+
+			}
+		
+			/**
+			 * on load
+			 */
+			$(function() {
+				
+				$('#selAction').value = 0;
+				
+				// Append event to action selector
+				$('#fetchData').click(function() {
+											
+					if(this.value == 0) {
+						return; 
+					}
+					
+                    pKey = $('#apikey').val();
+                    pSecret = $('#apisecret').val();
+                    
+                    pAction = 
+                        $('input[name=actionType]:checked').val() + '/'
+                        + $('#selAction').val()
+                    ;
+                    
+                    if ($('#entityId').val() !== '') {
+                        pAction = pAction + '/'
+                            + $('#entityId').val();
+                    }
+                    
+                    // Append event to date picker from
+                    pFrom = $('#datepickerFrom').val();
+
+                    // Append event to dete picker to
+                    pTo = $('#datepickerTo').val();                    
+                                                        
+					callBroker();
+			
+					$('#title').text(pAction);
+			
+				});
+                
+                $('input[name="rdoBreak"]').click(function() {
+                    pBreak = this.value;   
+                });
+				
+
+                var date = new Date();
+                
+				// set date picker defaults
+				$("#datepickerFrom").datepicker();
+				$("#datepickerFrom").datepicker( "option", "dateFormat", 'yy-mm-dd');
+				$("#datepickerFrom").val();
+				
+				$( "#datepickerTo" ).datepicker();
+				$( "#datepickerTo" ).datepicker( "option", "dateFormat", 'yy-mm-dd');
+				$( "#datepickerTo" ).val();
+
+			});
+			
+//			callBroker();
+
+		</script>
+	</head>
+
+	<body>
+		<form autocomplete="off">
+			<select id="selAction">
+                <option value="advertiser">Advertiser</option>
+                <option value="advertiser/campaign_group">Campaign Group</option>
+<!--                <option value="advertiser/campaign_label">Campaign Label</option>-->
+                <option value="advertiser/campaign">Campaign</option>
+                <option value="advertiser/banner">Banner</option>
+                
+                <option value="publisher">Publisher</option> 
+                <option value="publisher/website">Affiliate</option> 
+                <option value="publisher/zone">Zone</option>
+			</select>
+            <input type="text" id="entityId" />
+
+                <label for="rStats">Stats</label>
+                <input type ="radio" id="rStats" name="actionType" value='statistics' checked>
+                
+                <label for="rInventory">Inventory</label>
+                <input type ="radio" id="rInventory" name="actionType" value='inventory' >  
+
+                <p>
+                    <label for="rdoBreakDate">Date</label>
+                    <input type ="radio" id="rdoBreakDate" name="rdoBreak" value='date' checked>  
+
+                    <label for="rdoBreakEntity">Entity</label>
+                    <input type ="radio" id="rdoBreakEntity" name="rdoBreak" value='entity' >  
+
+                    <label for="rdoBreakGeo">Geo</label>
+                    <input type ="radio" id="rdoBreakGeo" name="rdoBreak" value='geo' >  
+
+                    <label for="rdoBreakBanner">Banner</label>
+                    <input type ="radio" id="rdoBreakBanner" name="rdoBreak" value='banner' >                  
+                </p>
+                
+		<p>
+            From: <input type="text" id="datepickerFrom" style="width:150px"/>
+			To: <input type="text" id="datepickerTo" style="width:150px" />
+		</p>
+        
+        <p>
+            APIKey: <input type="text" id="apikey" size="64" value='vnx0OnPBtT6hs22vHiGsW9VyA3VSmb'/><br>
+            Secret: <input type="text" id="apisecret" size="64" value='x2QGpHpqlpFo0HmHJwIyjQFaDxVnq2VsARqpCSc6yOQYIBD8EEloran5auDA'/>
+        </p>
+        
+        <input type="button" value="Fetch Data" id="fetchData">
+        
+		</form>
+		
+	<h1 id="title"></h1>
+    <div style="width:100%">
+        <div id="lineChart" style="display:inline-block; width:49%"></div>
+        <div id="barChart" style="display:inline-block;width:49%"></div>
+    </div>
+    <div id="table" style="display:block;width:100%"></div>
+    
+    <div id="rawData" style="padding:8px"> </div>
+    
+    <a href="http://www.convertcsv.com/json-to-csv.htm" target='_blank'>Convert JSON to CSV (grab the response from firebug)</a>
+    
+	</body>
+</html>
+
+
+
